@@ -13,9 +13,9 @@ const app = express();
 const PORT = 5000;
 
 //*********** database connection ***********//
-mongoose.connect(process.env.MONGODB_URL, { dbName: "daily-invoice-db", })
-  .then(() => console.log("Database Connected"))
-  .catch((err) => console.log("Database not connected", err));
+// mongoose.connect(process.env.MONGODB_URL, { dbName: "daily-invoice-db", })
+//   .then(() => console.log("Database Connected"))
+//   .catch((err) => console.log("Database not connected", err));
 
 //*********** middleware ***********//
 app.use(express.json());

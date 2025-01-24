@@ -3,8 +3,14 @@ const parser = new Parser();
 
 const convertSQLToORM = (sqlCode, orm) => {
   try {
+
     const ast = parser.astify(sqlCode);
-    
+
+    // Add comprehensive null checks
+    if (!ast || !ast.type) {
+      throw new Error('Invalid or unsupported SQL statement');
+    }
+
     switch (orm.toLowerCase()) {
       case 'sequelize':
         return generateSequelizeCode(ast);
@@ -14,6 +20,7 @@ const convertSQLToORM = (sqlCode, orm) => {
         throw new Error('Unsupported ORM type');
     }
   } catch (error) {
+    console.log(error);
     throw new Error(`Conversion error: ${error.message}`);
   }
 };
@@ -90,7 +97,7 @@ const handleSequelizeCreateTable = (ast) => {
 const handleSequelizeInsert = (ast) => {
   const tableName = ast.table[0].table;
   const columns = ast.columns.map(col => col.expr.column);
-  const values = ast.values[0].value.map(val => 
+  const values = ast.values[0].value.map(val =>
     typeof val.value === 'string' ? `'${val.value}'` : val.value
   );
 
@@ -102,7 +109,7 @@ const handleSequelizeInsert = (ast) => {
 const handleSequelizeSelect = (ast) => {
   const tableName = ast.from[0].table;
   const whereClause = ast.where ? convertSequelizeWhereClause(ast.where) : '';
-  
+
   return `${tableName}.findAll({
   ${whereClause ? `where: ${whereClause}` : ''}
 });`;
@@ -110,10 +117,10 @@ const handleSequelizeSelect = (ast) => {
 
 const handleSequelizeUpdate = (ast) => {
   const tableName = ast.table[0].table;
-  const updates = ast.set.map(setItem => 
+  const updates = ast.set.map(setItem =>
     `${setItem.column.column}: ${formatDefaultValue(setItem.value)}`
   ).join(',\n    ');
-  
+
   const whereClause = ast.where ? convertSequelizeWhereClause(ast.where) : '';
 
   return `${tableName}.update({
@@ -166,7 +173,7 @@ const handleSQLAlchemyCreateTable = (ast) => {
 const handleSQLAlchemyInsert = (ast) => {
   const tableName = ast.table[0].table;
   const columns = ast.columns.map(col => col.expr.column);
-  const values = ast.values[0].value.map(val => 
+  const values = ast.values[0].value.map(val =>
     typeof val.value === 'string' ? `'${val.value}'` : val.value
   );
 
@@ -180,16 +187,16 @@ session.commit()`;
 const handleSQLAlchemySelect = (ast) => {
   const tableName = ast.from[0].table;
   const whereClause = ast.where ? convertSQLAlchemyWhereClause(ast.where) : '';
-  
+
   return `session.query(${tableName})${whereClause ? `.filter(${whereClause})` : ''}.all()`;
 };
 
 const handleSQLAlchemyUpdate = (ast) => {
   const tableName = ast.table[0].table;
-  const updates = ast.set.map(setItem => 
+  const updates = ast.set.map(setItem =>
     `${setItem.column.column}=${formatDefaultValue(setItem.value)}`
   ).join(', ');
-  
+
   const whereClause = ast.where ? convertSQLAlchemyWhereClause(ast.where) : '';
 
   return `session.query(${tableName})${whereClause ? `.filter(${whereClause})` : ''}.update({
@@ -234,17 +241,25 @@ const mapSQLToSQLAlchemyType = (sqlType) => {
 };
 
 const formatDefaultValue = (value) => {
+  if (!value) return null;
+
   if (value.type === 'string') {
     return `'${value.value}'`;
   }
-  return value.value;
+  if (value.type === 'number') {
+    return value.value;
+  }
+  if (value.type === 'null') {
+    return null;
+  }
+  return `'${value.value}'`;
 };
 
 const convertSequelizeWhereClause = (whereClause) => {
   if (whereClause.type === 'binary_expr') {
     const left = whereClause.left.column || whereClause.left.expr;
     const right = formatDefaultValue(whereClause.right);
-    
+
     return `{ ${left}: { [Op.${mapOperator(whereClause.operator)}]: ${right} } }`;
   }
   return '{}';
@@ -254,7 +269,7 @@ const convertSQLAlchemyWhereClause = (whereClause) => {
   if (whereClause.type === 'binary_expr') {
     const left = whereClause.left.column || whereClause.left.expr;
     const right = formatDefaultValue(whereClause.right);
-    
+
     return `${tableName}.${left} ${mapOperator(whereClause.operator)} ${right}`;
   }
   return '';
@@ -273,5 +288,6 @@ const mapOperator = (sqlOperator) => {
   };
   return operatorMap[sqlOperator.toUpperCase()] || sqlOperator;
 };
+
 
 module.exports = { convertSQLToORM };
